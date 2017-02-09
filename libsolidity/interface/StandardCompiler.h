@@ -22,8 +22,7 @@
 
 #pragma once
 
-#include <string>
-#include <json/json.h>
+#include <libsolidity/interface/CompilerStack.h>
 
 namespace dev
 {
@@ -49,12 +48,24 @@ public:
 
 	/// Creates a new StandardCompiler.
 	/// @param _readFile callback to used to read files for import statements. Should return
-	StandardCompiler(ReadFileCallback const& _readFile = ReadFileCallback());
+	StandardCompiler(ReadFileCallback const& _readFile = ReadFileCallback())
+	{
+		CompilerStack::ReadFileCallback fileReader = [this,_readFile](std::string const& _path)
+		{
+			auto ret = _readFile(_path);
+			return CompilerStack::ReadFileResult{ret.success, ret.contentsOrErrorMessage};
+		};
+
+		m_compilerStack.reset(new CompilerStack(fileReader));
+	}
 
 	/// Sets all input parameters according to @a _input which conforms to the standardized input
 	/// format.
 	Json::Value compile(Json::Value const& _input);
 	std::string compile(std::string const& _input);
+
+private:
+	CompilerStack m_compilerStack;
 };
 
 }
