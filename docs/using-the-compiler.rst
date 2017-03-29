@@ -127,12 +127,12 @@ Input Description
         //   evm.ir - New assembly format before desugaring
         //   evm.assembly - New assembly format after desugaring
         //   evm.legacyAssemblyJSON - Old-style assembly format in JSON
-        //   evm.opcodes - Opcodes list
+        //   evm.bytecode - Bytecode
+        //   evm.bytecode.opcodes - Opcodes list
+        //   evm.bytecode.sourceMap - Source mapping (useful for debugging)
+        //   evm.deployedBytecode - Deployed bytecode
         //   evm.methodIdentifiers - The list of function hashes
         //   evm.gasEstimates - Function gas estimates
-        //   evm.bytecode - Bytecode
-        //   evm.deployedBytecode - Deployed bytecode
-        //   evm.sourceMap - Source mapping (useful for debugging)
         //   ewasm.wast - eWASM S-expressions format (not supported atm)
         //   ewasm.wasm - eWASM binary format (not supported atm)
         outputSelection: {
