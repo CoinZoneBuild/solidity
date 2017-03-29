@@ -58,6 +58,48 @@ Json::Value formatFatalError(string const& _type, string const& _message)
 	return output;
 }
 
+string formatExceptionInformation(
+	Exception const& _exception,
+	string const& _name,
+	function<Scanner const&(string const&)> const& _scannerFromSourceName
+)
+{
+	ostringstream errorOutput;
+	SourceReferenceFormatter::printExceptionInformation(errorOutput, _exception, _name, _scannerFromSourceName);
+	return errorOutput.str();
+}
+
+Json::Value formatErrorWithException(
+	Exception const& _exception,
+	bool const& _warning,
+	string const& _type,
+	string const& _component,
+	string const& _message,
+	function<Scanner const&(string const&)> const& _scannerFromSourceName
+)
+{
+	string message;
+	string formattedMessage = formatExceptionInformation(_exception, _message, _scannerFromSourceName);
+
+	// NOTE: the below is partially a copy from SourceReferenceFormatter
+	SourceLocation const* location = boost::get_error_info<errinfo_sourceLocation>(_exception);
+
+	if (string const* description = boost::get_error_info<errinfo_comment>(_exception))
+		message = ((_message.length() > 0) ? (_message + ":") : "") + *description;
+	else
+		message = _message;
+
+	if (location && location->sourceName)
+	{
+		Json::Value sourceLocation = Json::objectValue;
+		sourceLocation["file"] = *location->sourceName;
+		sourceLocation["start"] = location->start;
+		sourceLocation["end"] = location->end;
+	}
+
+	return formatError(_warning, _type, _component, message, formattedMessage, location);
+}
+
 string StandardCompiler::compile(string const& _input)
 {
 	Json::Value input;
@@ -131,49 +173,108 @@ Json::Value StandardCompiler::compileInternal(Json::Value const& _input)
 
 	auto scannerFromSourceName = [&](string const& _sourceName) -> solidity::Scanner const& { return m_compilerStack.scanner(_sourceName); };
 
+	Json::Value errors = Json::arrayValue;
+	bool success = false;
+
 	try
 	{
-		// @TODO check return value and parse errors
-		m_compilerStack.compile(optimize, optimizeRuns, libraries);
+		success = m_compilerStack.compile(optimize, optimizeRuns, libraries);
+
+		for (auto const& error: m_compilerStack.errors())
+		{
+			auto err = dynamic_pointer_cast<Error const>(error);
+
+			errors.append(formatErrorWithException(
+				*error,
+				err->type() == Error::Type::Warning,
+				err->typeName(),
+				"general",
+				"",
+				scannerFromSourceName
+			));
+		}
 	}
 	catch (Error const& _error)
 	{
 		if (_error.type() == Error::Type::DocstringParsingError)
-			cerr << "Documentation parsing error: " << *boost::get_error_info<errinfo_comment>(_error) << endl;
+			errors.append(formatError(
+				false,
+				"DocstringParsingError",
+				"general",
+				"Documentation parsing error: " + *boost::get_error_info<errinfo_comment>(_error)
+			));
 		else
-			SourceReferenceFormatter::printExceptionInformation(cerr, _error, _error.typeName(), scannerFromSourceName);
-
-		return Json::Value();
+			errors.append(formatErrorWithException(
+				_error,
+				false,
+				_error.typeName(),
+				"general",
+				"",
+				scannerFromSourceName
+			));
 	}
 	catch (CompilerError const& _exception)
 	{
-		SourceReferenceFormatter::printExceptionInformation(cerr, _exception, "Compiler error", scannerFromSourceName);
-		return Json::Value();
+		errors.append(formatErrorWithException(
+			_exception,
+			false,
+			"CompilerError",
+			"general",
+			"Compiler error (" + _exception.lineInfo() + ")",
+			scannerFromSourceName
+		));
 	}
 	catch (InternalCompilerError const& _exception)
 	{
-		cerr << "Internal compiler error during compilation:" << endl
-			<< boost::diagnostic_information(_exception);
-		return Json::Value();
+		errors.append(formatErrorWithException(
+			_exception,
+			false,
+			"InternalCompilerError",
+			"general",
+			"Internal compiler error (" + _exception.lineInfo() + ")", scannerFromSourceName
+		));
 	}
 	catch (UnimplementedFeatureError const& _exception)
 	{
-		cerr << "Unimplemented feature:" << endl
-			<< boost::diagnostic_information(_exception);
-		return Json::Value();
+		errors.append(formatErrorWithException(
+			_exception,
+			false,
+			"UnimplementedFeatureError",
+			"general",
+			"Unimplemented feature (" + _exception.lineInfo() + ")",
+			scannerFromSourceName));
 	}
 	catch (Exception const& _exception)
 	{
-		cerr << "Exception during compilation: " << boost::diagnostic_information(_exception) << endl;
-		return Json::Value();
+		errors.append(formatError(
+			false,
+			"Exception",
+			"general",
+			"Exception during compilation: " + boost::diagnostic_information(_exception)
+		));
 	}
 	catch (...)
 	{
-		cerr << "Unknown exception during compilation." << endl;
-		return Json::Value();
+		errors.append(formatError(
+			false,
+			"Exception",
+			"general",
+			"Unknown exception during compilation."
+		));
 	}
 
 	Json::Value output = Json::objectValue;
+
+	if (errors.size() > 0)
+		output["errors"] = errors;
+
+	// Stop here
+	if (!success)
+	{
+		if (errors.size() == 0)
+			return formatFatalError("InternalCompilerError", "No error reported, but compilation failed.");
+		return output;
+	}
 
 	output["sources"] = Json::objectValue;
 	unsigned sourceIndex = 0;
