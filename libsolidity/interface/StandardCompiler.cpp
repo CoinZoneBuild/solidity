@@ -139,6 +139,14 @@ StringMap createSourceList(Json::Value const& _input)
 	return sources;
 }
 
+Json::Value methodIdentifiers(ContractDefinition const& _contract)
+{
+	Json::Value methodIdentifiers(Json::objectValue);
+	for (auto const& it: _contract.interfaceFunctions())
+		methodIdentifiers[it.second->externalSignature()] = toHex(it.first.ref());
+	return methodIdentifiers;
+}
+
 Json::Value StandardCompiler::compileInternal(Json::Value const& _input)
 {
 	m_compilerStack.reset(false);
@@ -310,7 +318,7 @@ Json::Value StandardCompiler::compileInternal(Json::Value const& _input)
 		ostringstream unused;
 		evmData["legacyAssemblyJSON"] = m_compilerStack.streamAssembly(unused, contractName, createSourceList(_input), true);
 		evmData["opcodes"] = solidity::disassemble(m_compilerStack.object(contractName).bytecode);
-		// @TODO: add methodIdentifiers
+		evmData["methodIdentifiers"] = methodIdentifiers(m_compilerStack.contractDefinition(contractName));
 		// @TODO: add gasEstimates
 
 		// EVM bytecode
