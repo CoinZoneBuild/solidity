@@ -681,19 +681,18 @@ bool CommandLineInterface::processInput()
 				successful = false;
 
 		for (auto const& error: m_compiler->errors())
-			SourceReferenceFormatter::printExceptionInformation(
-				cerr,
+			cerr << SourceReferenceFormatter::formatExceptionInformation(
 				*error,
 				(error->type() == Error::Type::Warning) ? "Warning" : "Error",
 				scannerFromSourceName
-			);
+			) << endl;
 
 		if (!successful)
 			return false;
 	}
 	catch (CompilerError const& _exception)
 	{
-		SourceReferenceFormatter::printExceptionInformation(cerr, _exception, "Compiler error", scannerFromSourceName);
+		cerr << SourceReferenceFormatter::formatExceptionInformation(_exception, "Compiler error", scannerFromSourceName) << endl;
 		return false;
 	}
 	catch (InternalCompilerError const& _exception)
@@ -713,7 +712,7 @@ bool CommandLineInterface::processInput()
 		if (_error.type() == Error::Type::DocstringParsingError)
 			cerr << "Documentation parsing error: " << *boost::get_error_info<errinfo_comment>(_error) << endl;
 		else
-			SourceReferenceFormatter::printExceptionInformation(cerr, _error, _error.typeName(), scannerFromSourceName);
+			cerr << SourceReferenceFormatter::formatExceptionInformation(_error, _error.typeName(), scannerFromSourceName) << endl;
 
 		return false;
 	}
@@ -956,12 +955,11 @@ bool CommandLineInterface::assemble()
 	for (auto const& stack: m_assemblyStacks)
 	{
 		for (auto const& error: stack.second.errors())
-			SourceReferenceFormatter::printExceptionInformation(
-				cerr,
+			cerr << SourceReferenceFormatter::formatExceptionInformation(
 				*error,
 				(error->type() == Error::Type::Warning) ? "Warning" : "Error",
 				[&](string const& _source) -> Scanner const& { return *scanners.at(_source); }
-			);
+			) << endl;
 		if (!Error::containsOnlyWarnings(stack.second.errors()))
 			successful = false;
 	}
