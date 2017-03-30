@@ -367,10 +367,16 @@ Json::Value StandardCompiler::compileInternal(Json::Value const& _input)
 
 		contractData["evm"] = evmData;
 
-		contractsOutput[contractName] = contractData;
+		size_t colon = contractName.find(':');
+		string const& file = contractName.substr(0, colon);
+		string const& name = contractName.substr(colon + 1);
+
+		if (!contractsOutput[file].isObject())
+			contractsOutput[file] = Json::objectValue;
+
+		contractsOutput[file][name] = contractData;
 	}
-	output["contracts"] = Json::objectValue;
-	output["contracts"][""] = contractsOutput;
+	output["contracts"] = contractsOutput;
 
 	return output;
 }
